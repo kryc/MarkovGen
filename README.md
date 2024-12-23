@@ -38,7 +38,6 @@ markovgen report model.markov | less;
 The output of the report shows the statistical probabilities of the first character, and the probablilities of any digraph.
 
 ```text
-***START***
 ***Start Character***
 A 0.01448
 B 0.01467
