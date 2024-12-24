@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cstring>
 #include <iostream>
 #include <iomanip>
@@ -118,6 +119,53 @@ bool tick_position(
     return false;
 }
 
+bool tick_position_sorted(
+    char buffer[1024],
+    size_t length,
+    size_t position,
+    double min_weight,
+    double weights[256][256]
+)
+{
+    char next_highest = '\0';
+    for (size_t j = ' '; j <= '~'; ++j)
+    {
+        // Do not use same value again
+        if (j == buffer[position])
+        {
+            continue;
+        }
+        if (position == 0
+            && weights[0][j] >= min_weight
+            && weights[0][j] < weights[0][buffer[position]]
+            && (
+                next_highest == '\0'
+                || weights[0][j] > weights[0][next_highest]
+            )
+        )
+        {
+            next_highest = static_cast<char>(j);
+        }
+        else if (position > 0
+            && weights[buffer[position - 1]][j] >= min_weight
+            && weights[buffer[position - 1]][j] < weights[buffer[position - 1]][buffer[position]]
+            && (
+                next_highest == '\0'
+                || weights[buffer[position - 1]][j] > weights[buffer[position - 1]][next_highest]
+            )
+        )
+        {
+            next_highest = static_cast<char>(j);
+        }
+    }
+    if (next_highest != '\0')
+    {
+        buffer[position] = next_highest;
+        return true;
+    }
+    return false;
+}
+
 bool
 tick(
     char buffer[1024],
@@ -155,6 +203,175 @@ tick(
     return false;
 }
 
+bool
+tick_sorted(
+    char buffer[1024],
+    size_t length,
+    double min_weight,
+    double weights[256][256]
+)
+{
+    // Try and replace the last character with the next
+    // character based on the previous character
+    for (ssize_t i = length - 1; i > -1; --i)
+    {
+        if (tick_position_sorted(buffer, length, i, min_weight, weights))
+        {
+            // If it is not the last character, reset all subsequent
+            // characters to the next character based on the previous
+            // character
+            if (i < length - 1)
+            {
+                for (size_t j = i + 1; j < length; ++j)
+                {
+                    char max = '\0';
+                    for (size_t k = ' '; k <= '~'; ++k)
+                    {
+                        if (weights[buffer[j - 1]][k] >= min_weight && (max == '\0' || weights[buffer[j - 1]][k] > weights[buffer[j - 1]][max]))
+                        {
+                            max = static_cast<char>(k);
+                        }
+                    }
+                    assert(max != '\0');
+                    buffer[j] = max;
+                }
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+// Initialize the buffer
+bool
+init(
+    char buffer[1024],
+    size_t length,
+    double min_weight,
+    double weights[256][256]
+)
+{
+    memset(buffer, 0, length + 1);
+    // For each position in length, find the first
+    // character based above the minimum weight
+    for (size_t i = 0; i < length; ++i)
+    {
+        if (i == 0)
+        {
+            for (size_t j = ' '; j <= '~'; ++j)
+            {
+                if (weights[0][j] >= min_weight)
+                {
+                    buffer[0] = static_cast<char>(j);
+                    break;
+                }
+            }
+            if (buffer[0] == '\0')
+            {
+                std::cerr << "No characters above minimum weight" << std::endl;
+                return false;
+            }
+        }
+        else
+        {
+            // For each subsequent position, find the next
+            // character based on the previous character
+            for (size_t j = 1; j < length; ++j)
+            {
+                for (size_t k = ' '; k <= '~'; ++k)
+                {
+                    if (weights[buffer[j - 1]][k] >= min_weight)
+                    {
+                        buffer[j] = static_cast<char>(k);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+// Initialize the buffer with the most likely characters
+bool
+init_sorted(
+    char buffer[1024],
+    size_t length,
+    double min_weight,
+    double weights[256][256]
+)
+{
+    memset(buffer, 0, length + 1);
+    // We cannot have two equal weights for the same character
+    for (size_t x = 0; x < 256; x++)
+    {
+        for (size_t i = ' '; i <= '~'; ++i)
+        {
+            if (weights[x][i] == 0.f)
+            {
+                continue;
+            }
+            for (size_t j = ' '; j <= '~'; ++j)
+            {
+                if (i == j)
+                {
+                    continue;
+                }
+                if (weights[x][i] == weights[x][j])
+                {
+                    weights[x][j] -= 0.00000001;
+                }
+            }
+        }
+    }
+    // For each position in length, find the first
+    // character based above the minimum weight
+    for (size_t i = 0; i < length; ++i)
+    {
+        if (i == 0)
+        {
+            char max = '\0';
+            for (size_t j = ' '; j <= '~'; ++j)
+            {
+                if (weights[0][j] >= min_weight && (max == '\0' || weights[0][j] > weights[0][max]))
+                {
+                    max = static_cast<char>(j);
+                }
+            }
+            if (max == '\0')
+            {
+                std::cerr << "No characters above minimum weight" << std::endl;
+                return false;
+            }
+            buffer[0] = max;
+        }
+        else
+        {
+            // For each subsequent position, find the next
+            // character based on the previous character
+            for (size_t j = 1; j < length; ++j)
+            {
+                char max = '\0';
+                for (size_t k = ' '; k <= '~'; ++k)
+                {
+                    if (weights[buffer[j - 1]][k] >= min_weight && (max == '\0' || weights[buffer[j - 1]][k] > weights[buffer[j - 1]][max]))
+                    {
+                        max = static_cast<char>(k);
+                    }
+                }
+                if (max == '\0')
+                {
+                    std::cerr << "No characters above minimum weight" << std::endl;
+                    return false;
+                }
+                buffer[j] = max;
+            }
+        }
+    }
+    return true;
+}
+
 // Generate strings based on the weights
 void
 generate(
@@ -177,46 +394,14 @@ generate(
     fclose(f);
     // Generate and print all strings
     char buffer[1024];
-    memset(buffer, 0, sizeof(buffer));
-    // For each position in length, find the first
-    // character based above the minimum weight
-    for (size_t i = 0; i < length; ++i)
+    
+    if (!init_sorted(buffer, length, min_weight, weights))
     {
-        if (i == 0)
-        {
-            for (size_t j = ' '; j <= '~'; ++j)
-            {
-                if (weights[0][j] >= min_weight)
-                {
-                    buffer[0] = static_cast<char>(j);
-                    break;
-                }
-            }
-            if (buffer[0] == '\0')
-            {
-                std::cerr << "No characters above minimum weight" << std::endl;
-                return;
-            }
-        }
-        else
-        {
-            // For each subsequent position, find the next
-            // character based on the previous character
-            for (size_t j = 1; j < length; ++j)
-            {
-                for (size_t k = ' '; k <= '~'; ++k)
-                {
-                    if (weights[buffer[j - 1]][k] >= min_weight)
-                    {
-                        buffer[j] = static_cast<char>(k);
-                        break;
-                    }
-                }
-            }
-        }
+        return;
     }
+
     std::cout << buffer << std::endl;
-    while (tick(buffer, length, min_weight, weights))
+    while (tick_sorted(buffer, length, min_weight, weights))
     {
         std::cout << buffer << std::endl;
     }
