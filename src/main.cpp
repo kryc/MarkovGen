@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <iomanip>
@@ -25,11 +26,11 @@ build(
             continue;
         }
         // Store the initial character count
-        counts[0][line[0]]++;
+        counts[0][(uint8_t)line[0]]++;
         // Count the frequency of each character pair
         for (size_t i = 0; i < line.size() - 1; ++i)
         {
-            counts[line[i]][line[i + 1]]++;
+            counts[(uint8_t)line[i]][(uint8_t)line[i + 1]]++;
         }
     }
     // Calculate the weights
